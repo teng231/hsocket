@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -63,22 +64,25 @@ func (ws *Ws) start() {
 			case "disconnected":
 				// REMOVE FROM HUB
 				if _, ok := ws.clients[cmd.client]; ok {
-					ws.closeConnection(cmd.client)
+					// ws.closeConnection(cmd.client)
 				}
 				// REMOVE RROM EVENT LIST
-				for evtID := range ws.mapEvents {
-					removeItemFromSlice(ws.mapEvents[evtID], cmd.client)
+				for evtId, clients := range ws.mapEvents {
+					if len(clients) == 0 {
+						break
+					}
+					ws.mapEvents[evtId] = removeItemFromSlice(clients, cmd.client)
 				}
-			case "subscribed":
+			case "subscribe":
 				if _, ok := ws.clients[cmd.client]; !ok {
 					return
 				}
 				ws.mapEvents[cmd.payload] = append(ws.mapEvents[cmd.payload], cmd.client)
-			case "unsubscribed":
+			case "unsubscribe":
 				if _, ok := ws.clients[cmd.client]; !ok {
 					return
 				}
-				removeItemFromSlice(ws.mapEvents[cmd.payload], cmd.client)
+				ws.mapEvents[cmd.payload] = removeItemFromSlice(ws.mapEvents[cmd.payload], cmd.client)
 			}
 		case message := <-ws.broadcast:
 			// Client subEvent
@@ -117,7 +121,7 @@ func (client *Client) inPump() {
 	defer func() {
 		client.ws.register <- &Command{Type: "disconnected", client: client}
 		client.conn.Close()
-		close(client.sender)
+		// close(client.sender)
 	}()
 	client.conn.SetReadLimit(int64(MAX_SIZE))
 	client.conn.SetReadDeadline(time.Now().Add(PONG_WAIT))
@@ -139,9 +143,20 @@ func (client *Client) inPump() {
 		if err := json.Unmarshal(message, cmd); err != nil {
 			log.Fatal(err)
 		}
-		// just using for command
-		cmd.client = client
-		client.ws.register <- cmd
+
+		if cmd.Type == "subscribe" {
+			client.subscribe(cmd.payload)
+			client.ws.broadcast <- &Message{
+				payload: []byte(fmt.Sprintf("Hello %s", client.id)),
+				eventId: cmd.payload,
+			}
+		} else if cmd.Type == "unsubscribe" {
+			client.unsubscribe(cmd.payload)
+		} else {
+			// just using for command
+			cmd.client = client
+			client.ws.register <- cmd
+		}
 	}
 }
 
@@ -151,7 +166,7 @@ func (client *Client) outPump() {
 		ticker.Stop()
 		client.ws.register <- &Command{Type: "disconnected", client: client}
 		client.conn.Close()
-		close(client.sender)
+		// close(client.sender)
 	}()
 	for {
 		select {
@@ -169,11 +184,6 @@ func (client *Client) outPump() {
 			}
 			w.Write(message)
 
-			// Add queued chat messages to the current websocket message.
-			for i := 0; i < len(message); i++ {
-				w.Write(message)
-			}
-
 			if err := w.Close(); err != nil {
 				return
 			}
@@ -189,7 +199,7 @@ func (client *Client) outPump() {
 func (client *Client) subscribe(eventID string) {
 	client.ws.register <- &Command{
 		client:  client,
-		Type:    "subscribed",
+		Type:    "subscribe",
 		payload: eventID,
 	}
 }
@@ -197,7 +207,7 @@ func (client *Client) subscribe(eventID string) {
 func (client *Client) unsubscribe(eventID string) {
 	client.ws.register <- &Command{
 		client:  client,
-		Type:    "unsubscribed",
+		Type:    "unsubscribe",
 		payload: eventID,
 	}
 }
