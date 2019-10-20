@@ -3,12 +3,12 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 )
 
-var addr = flag.String("addr", ":8000", "http service address")
+var addr = flag.String("addr", os.Getenv("PORT"), "http service address")
 
 func serveHome(w http.ResponseWriter, r *http.Request) {
 	log.Println(r.URL)
@@ -23,28 +23,33 @@ func serveHome(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "index.html")
 }
 
+func serveJS(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	http.ServeFile(w, r, "wsClient.js")
+}
+
 func main() {
 	flag.Parse()
 	ws := initWs()
 	go ws.start()
 	http.HandleFunc("/", serveHome)
+	http.HandleFunc("/wsClient.js", serveJS)
 
 	http.HandleFunc("/ws-firer", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			return
 		}
-		b, err := ioutil.ReadAll(r.Body)
-		defer r.Body.Close()
-		if err != nil {
-			http.Error(w, err.Error(), 500)
-			return
-		}
 		msg := &Message{}
-		if err := json.Unmarshal(b, msg); err != nil {
+		if err := json.NewDecoder(r.Body).Decode(msg); err!=nil {
 			http.Error(w, err.Error(), 400)
 			return
 		}
+
 		ws.broadcast <- msg
+
 		w.Write([]byte("done"))
 	})
 
@@ -58,4 +63,5 @@ func main() {
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
+	log.Print("WS run away at ", os.Getenv("PORT"))
 }
