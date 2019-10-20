@@ -1,49 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<script type="text/javascript">
-window.onload = function () {
-    var conn;
-    var msg = document.getElementById("msg");
-    var log = document.getElementById("log");
-    function appendLog(item) {
-        var doScroll = log.scrollTop > log.scrollHeight - log.clientHeight - 1;
-        log.appendChild(item);
-        if (doScroll) {
-            log.scrollTop = log.scrollHeight - log.clientHeight;
-        }
-    }
-    if (!window["WebSocket"]) {
-			var item = document.createElement("div");
-			item.innerHTML = "<b>Your browser does not support WebSockets.</b>";
-			appendLog(item);
-			return
-    }
-		conn = new WebSocket("ws://" + document.location.host + "/ws");
-		conn.onclose = function (evt) {
-				var item = document.createElement("div");
-				item.innerHTML = "<b>Connection closed.</b>";
-				appendLog(item);
-		};
+<script src="./wsClient.js"></script>
 
-		conn.onopen = function () {
-			conn.send(JSON.stringify({
-				Type: 'subscribe',
-				payload:'event.users.af1ss'
-			}))
-		}
-
-		conn.onmessage = function (evt) {
-				var messages = evt.data.split('\n');
-				for (var i = 0; i < messages.length; i++) {
-						var item = document.createElement("div");
-						item.innerText = messages[i].toString();
-						appendLog(item);
-				}
-		};
-
-};
-</script>
 <style type="text/css">
 html {
     overflow: hidden;
@@ -80,9 +39,59 @@ body {
 </head>
 <body>
 <div id="log"></div>
+
 <form id="form">
-    <input type="submit" value="Send" />
-    <input type="text" id="msg" size="64"/>
+		<button type="button" onclick="wsclient.destroy()">@click_to_destroy</button>
+		<button type="button" onclick="wsclient.reconnect()">@click_to_reconnect</button>
+		<button type="button" onclick="wsclient.subscribe('topic.x')">@sub_topic_x</button>
+
+		<button type="button" onclick="postData('topic.general', 'sent ' + Date.now() )">@fire_message_general</button>
+		<button type="button" onclick="postData('topic.x', 'sent x ' + Date.now() )">@fire_message_x</button>
 </form>
+<script>
+	function postData(topic, body) {
+		return fetch('http://' + document.location.host + '/ws-firer', {
+			method: 'POST', // *GET, POST, PUT, DELETE, etc.
+			mode: 'cors', // no-cors, *cors, same-origin
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				topic, body
+			}) // body data type must match "Content-Type" header
+		}).then(rs => rs.json())
+	}
+</script>
+<script type="text/javascript">
+		var msg = document.getElementById("msg");
+		var log = document.getElementById("log");
+		function appendLog(item) {
+				var doScroll = log.scrollTop > log.scrollHeight - log.clientHeight - 1;
+				log.appendChild(item);
+				if (doScroll) {
+						log.scrollTop = log.scrollHeight - log.clientHeight;
+				}
+		}
+		var wsclient = wsClient({
+			WebSocket: window.WebSocket,
+			url: "ws://" + document.location.host + "/ws"
+		})
+
+		wsclient.connect(function() {
+			wsclient.subscribe('topic.general')
+		})
+
+		wsclient.onmessage = function(err, message, evt) {
+			var item = document.createElement("div");
+			if(err) {
+				item.innerText = err
+				appendLog(item);
+				return
+			}
+			item.innerText = `"${message.topic}": ${message.body}`
+			appendLog(item);
+		}
+
+	</script>
 </body>
 </html>
