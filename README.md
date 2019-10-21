@@ -15,28 +15,27 @@ go get -v github.com/my0sot1s/hsocket
 JS client request [wsclient](https://github.com/my0sot1s/hsocket/blob/master/wsClient.js)
 
 ``` js
-	http://<path>/wsClient.js
+http://<path>/wsClient.js
 ```
 ### Simple flow
 
 ```
-                          +-----+
-                          |client
-+------------+   /ws      |     |
-|            +----------->+-----+
-|     ws     |
-|            |   /ws      +-----+
-+------+-----+-------<----+client
-       ^                  |     |
-       |                  +-----+
-       |/ws-firer
-       |
-  +----+----+
-  |         |
-  |other service
-  |         |
-  +---------+
 
+                         +------------+
++--------+      /ws      |            |    /ws        +----------+
+| client +--------------->     ws     +--------------->  client  |
++--------+  -subscribe   |            |   -broadcast  +----------+
+            unsubscribe  +------+-----+
+                                |
+                                |
+                                |/ws+firer
+                                |
+                                |
+                                |
+                    +----------------------+
+                    |  other service(grpc) |
+                    |  caller (rest)       |
+                    +----------------------+
 ```
 
 ## Machenics
