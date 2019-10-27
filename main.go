@@ -8,7 +8,15 @@ import (
 	"os"
 )
 
-var addr = flag.String("addr", os.Getenv("PORT"), "http service address")
+var addr = flag.String("addr", ":" + os.Getenv("PORT"), "http service address")
+
+func index(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Write([]byte("using /demo to run demo"))
+}
 
 func serveHome(w http.ResponseWriter, r *http.Request) {
 	log.Println(r.URL)
@@ -31,26 +39,59 @@ func serveJS(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "wsClient.js")
 }
 
+func wsFirer (ws*Ws, w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		return
+	}
+	msg := &Message{}
+	if err := json.NewDecoder(r.Body).Decode(msg); err!=nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+
+	ws.broadcast <- msg
+
+	w.Write([]byte("done"))
+}
+
+func ping(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		return
+	}
+	w.Write([]byte("pong"))
+}
+
+func wsInspect(ws *Ws, w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		return
+	}
+	detail := make(map[string] int)
+	for k, val := range ws.mapTopics {
+		detail[k] = len(val)
+	}
+	if b, err := json.Marshal(detail); err == nil {
+		w.Write([]byte(b))
+		return
+	}
+	w.Write([]byte("troube for inspect"))
+}
+
 func main() {
 	flag.Parse()
 	ws := initWs()
 	go ws.start()
-	http.HandleFunc("/", serveHome)
+
+	http.HandleFunc("/", index)
+	http.HandleFunc("/demo", serveHome)
 	http.HandleFunc("/wsClient.js", serveJS)
+	http.HandleFunc("/ping", ping)
 
 	http.HandleFunc("/ws-firer", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			return
-		}
-		msg := &Message{}
-		if err := json.NewDecoder(r.Body).Decode(msg); err!=nil {
-			http.Error(w, err.Error(), 400)
-			return
-		}
+		wsFirer(ws, w, r)
+	})
 
-		ws.broadcast <- msg
-
-		w.Write([]byte("done"))
+	http.HandleFunc("/ws-inspect", func(w http.ResponseWriter, r *http.Request) {
+		wsInspect(ws, w, r)
 	})
 
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {

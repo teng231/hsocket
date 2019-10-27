@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"time"
-
 	"github.com/gorilla/websocket"
 )
 
@@ -21,12 +20,14 @@ var upgrader = websocket.Upgrader{
 type Message struct {
 	Body string 	`json:"body"`
 	Topic string `json:"topic"`
+	ID string `json:"id"`
 }
 
 type Command struct {
 	client  *Client
 	Type    string
 	Topic string
+	MsgID  string
 }
 
 type Ws struct {
@@ -58,8 +59,14 @@ func (ws *Ws) start() {
 		case cmd := <-ws.register:
 			switch cmd.Type {
 			case "connected":
+				log.Print("-- connected  ", cmd.client.id)
 				ws.clients[cmd.client] = true
+				// time.AfterFunc(10 * time.Second, func() {
+				// 	cmd.client.closeConnection()
+				// 	log.Print("Closed ", cmd.client.id)
+				// })
 			case "disconnected":
+				log.Print(cmd.client.id , " disconnected" )
 				// REMOVE FROM HUB
 				if _, ok := ws.clients[cmd.client]; ok {
 					ws.closeConnection(cmd.client)
@@ -83,12 +90,10 @@ func (ws *Ws) start() {
 				ws.mapTopics[cmd.Topic] = removeItemFromSlice(ws.mapTopics[cmd.Topic], cmd.client)
 			}
 		case message := <-ws.broadcast:
-			log.Print("Inside broadcast", message)
 			// Client subEvent
 			for _, client := range ws.mapTopics[message.Topic] {
-				select {
+				select{
 				case client.sender <- message:
-				default: ws.closeConnection(client)
 				}
 			}
 		}
@@ -115,7 +120,6 @@ func initClient(ws *Ws, w http.ResponseWriter, r *http.Request) *Client {
 		Type:   "connected",
 		client: client,
 	}
-	log.Print("ws1", ws)
 	return client
 }
 
@@ -135,7 +139,8 @@ func (client *Client) inPump() {
 		_, message, err := client.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("error: %v", err)
+				log.Printf(client.id, "disconnected")
+				client.conn.Close()
 			}
 			break
 		}
@@ -185,13 +190,13 @@ func (client *Client) outPump() {
 			}
 			var b []byte
 			if b, err = json.Marshal(message); err!=nil {
-				log.Print("ERRR")
+				log.Print("ERRR", err)
 				return
 			}
 			w.Write(b)
 
 			if err := w.Close(); err != nil {
-				log.Print("ERRR")
+				log.Print("ERRR", err)
 				return
 			}
 		case <-ticker.C:
@@ -201,6 +206,14 @@ func (client *Client) outPump() {
 			}
 		}
 	}
+}
+
+func (client *Client) closeConnection() {
+	client.ws.register <- &Command{
+		client:  client,
+		Type:    "disconected",
+	}
+	client.conn.Close()
 }
 
 func (client *Client) subscribe(topic string) {
