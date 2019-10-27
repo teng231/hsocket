@@ -1,0 +1,4 @@
+#!/bin/bash
+
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -o hsocket .
+docker build -t my0sot1s/hsocket:1.0.3 . --rm
