@@ -1,18 +1,31 @@
-
-var _conn = null
-var _topics = []
-
-
 function wsClient(configs){
+	var MAX_RETRY = 7
+	var CURRENT_RETRIED = 0
+	var _ws = {
+		conn: null,
+		backoff: 1000,
+		topics: {},
+		url: configs.url,
+	}
 	let me = {}
 	me.onmessage = function() {}
 
 	me.connect = function(cb) {
-		_conn = new configs.WebSocket(configs.url)
-		_conn.onopen = function() {
+		_ws.conn = new configs.WebSocket(_ws.url)
+		_ws.conn.id = CURRENT_RETRIED
+		_ws.conn.onopen = function() {
 			if(typeof cb === 'function') cb()
+			CURRENT_RETRIED = 0
 		}
-		_conn.onmessage = function(evt) {
+		_ws.conn.onclose = function(evt) {
+			if(CURRENT_RETRIED > MAX_RETRY) {
+				me.ondead()
+			}
+			setTimeout(() => {
+				me.closed(evt)
+			}, CURRENT_RETRIED * _ws.backoff)
+		}
+		_ws.conn.onmessage = function(evt) {
 			let data = evt.data
 			if(!data) cb(Error('message empty'), null, evt)
 			try{
@@ -22,31 +35,26 @@ function wsClient(configs){
 				me.onmessage(err, null, evt)
 			}
 		}
-		_conn.onerror = function(evt) {
-			me.onerror(evt)
-		}
 	}
 
 	me.subscribe = function(topic) {
-		if(_topics.includes(topic)) return
-		_conn.send(JSON.stringify({
+		_ws.conn.send(JSON.stringify({
 			Type: 'subscribe',
 			topic: topic
 		}))
-		_topics.push(topic)
+		_ws.topics[topic] = true
 	}
 
 	me.unsubscribe = function(topic) {
-		if(!_topics.includes(topic)) return
-		_conn.send(JSON.stringify({
+		_ws.conn.send(JSON.stringify({
 			Type: 'unsubscribe',
 			topic: topic
 		}))
-		_topics = _topics.filter(tp => tp == topic)
+		delete _ws.topics[topic]
 	}
 
 	me.send = function(topic, payload) {
-		if(!_topics.includes(topic)) {
+		if(!_ws.topics.includes(topic)) {
 			me.subscribe(topic)
 		}
 		var body = ''
@@ -56,30 +64,29 @@ function wsClient(configs){
 		if(typeof payload == 'object') {
 			body = JSON.stringify(payload)
 		}
-		_conn.send(JSON.stringify({
+		_ws.conn.send(JSON.stringify({
 			topic: topic,
 			body: body
 		}))
 	}
 
 	me.getTopics = function() {
-		return _topics
+		return Object.keys(_ws.topics)
 	}
 
 	me.destroy = function() {
-		if(!_conn) return
-		_conn.close()
-		_topics = []
+		if(!_ws.conn) return
+		_ws.conn.close()
+		_ws.topics = {}
 	}
 
 	me.reconnect = function(cb) {
+		if(CURRENT_RETRIED > MAX_RETRY) return
 		var topics = me.getTopics()
-		me.destroy()
-		debugger
+		if([_ws.conn.CONNECTING, _ws.conn.OPEN].includes(_ws.conn.readyState)) return
+		CURRENT_RETRIED++
 		me.connect(function() {
-			topics.forEach(tp => {
-				me.subscribe(tp)
-			})
+			topics.forEach(tp => me.subscribe(tp))
 			if(typeof cb == 'function') cb()
 		})
 	}

@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="ie=edge">
 <script src="./wsClient.js"></script>
 
 <style type="text/css">
@@ -8,7 +11,7 @@ html {
     overflow: hidden;
 }
 body {
-    overflow: hidden;
+    overflow: auto;
     padding: 0;
     margin: 0;
     width: 100%;
@@ -35,20 +38,27 @@ body {
     width: 100%;
     overflow: hidden;
 }
+	#myInput {
+		height:25px;
+		font-size: 12px;
+		width: 99%;
+	}
 </style>
 </head>
 <body>
 <div id="log"></div>
 
 <form id="form">
+	<input type="text" id="myInput" placeholder="Nhap tin nhan .........">
 		<button type="button" onclick="wsclient.destroy()">@click_to_destroy</button>
 		<button type="button" onclick="wsclient.reconnect()">@click_to_reconnect</button>
+		<button type="button" onclick="wsclient.unsubscribe('topic.x')">@unsub_topic_x</button>
 		<button type="button" onclick="wsclient.subscribe('topic.x')">@sub_topic_x</button>
-
-		<button type="button" onclick="postData('topic.general', 'sent ' + Date.now() )">@fire_message_general</button>
-		<button type="button" onclick="postData('topic.x', 'sent x ' + Date.now() )">@fire_message_x</button>
+		<button type="button" onclick="postData('topic.general', navigator.appCodeName )">@fire_message_general</button>
+		<button type="button" onclick="postData('topic.x', 'sent x ' + navigator.appCodeName )">@fire_message_x</button>
 </form>
 <script>
+
 	function postData(topic, body) {
 		return fetch('http://' + document.location.host + '/ws-firer', {
 			method: 'POST', // *GET, POST, PUT, DELETE, etc.
@@ -61,6 +71,18 @@ body {
 			}) // body data type must match "Content-Type" header
 		}).then(rs => rs.json())
 	}
+	var input = document.getElementById("myInput");
+
+// Execute a function when the user releases a key on the keyboard
+input.addEventListener("keyup", function(event) {
+	// Number 13 is the "Enter" key on the keyboard
+	if (event.keyCode === 13) {
+		// Cancel the default action, if needed
+		event.preventDefault();
+		// Trigger the button element with a click
+		postData('topic.general', event.target.value)
+	}
+});
 </script>
 <script type="text/javascript">
 		var msg = document.getElementById("msg");
@@ -80,6 +102,25 @@ body {
 		wsclient.connect(function() {
 			wsclient.subscribe('topic.general')
 		})
+
+		wsclient.error = function(evt) {
+			var item = document.createElement("div");
+			item.innerText = 'Connection error'
+			appendLog(item);
+		}
+
+		wsclient.closed = function(evt) {
+			var item = document.createElement("div");
+			item.innerText = 'Connection closed'
+			appendLog(item);
+			// reconnect
+			wsclient.reconnect()
+		}
+		wsclient.ondead = function() {
+			var item = document.createElement("div");
+			item.innerText = 'Connection dead'
+			appendLog(item);
+		}
 
 		wsclient.onmessage = function(err, message, evt) {
 			var item = document.createElement("div");
