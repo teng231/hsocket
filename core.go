@@ -6,7 +6,9 @@ import (
 	"log"
 	"net/http"
 	"time"
+
 	"github.com/gorilla/websocket"
+	"github.com/my0sot1s/header/wsh"
 )
 
 var MAX_SIZE = 1024
@@ -17,22 +19,16 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
-type Message struct {
-	Body string 	`json:"body"`
-	Topic string `json:"topic"`
-	ID string `json:"id"`
-}
-
 type Command struct {
-	client  *Client
-	Type    string
-	Topic string
+	client *Client
+	Type   string
+	Topic  string
 	MsgID  string
 }
 
 type Ws struct {
 	clients   map[*Client]bool
-	broadcast chan *Message
+	broadcast chan *wsh.Message
 	register  chan *Command
 	mapTopics map[string][]*Client
 }
@@ -41,12 +37,12 @@ type Client struct {
 	id     string
 	ws     *Ws
 	conn   *websocket.Conn
-	sender chan *Message
+	sender chan *wsh.Message
 }
 
 func initWs() *Ws {
 	return &Ws{
-		broadcast: make(chan *Message),
+		broadcast: make(chan *wsh.Message),
 		register:  make(chan *Command),
 		clients:   make(map[*Client]bool),
 		mapTopics: make(map[string][]*Client),
@@ -61,12 +57,8 @@ func (ws *Ws) start() {
 			case "connected":
 				log.Print("-- connected  ", cmd.client.id)
 				ws.clients[cmd.client] = true
-				// time.AfterFunc(10 * time.Second, func() {
-				// 	cmd.client.closeConnection()
-				// 	log.Print("Closed ", cmd.client.id)
-				// })
 			case "disconnected":
-				log.Print(cmd.client.id , " disconnected" )
+				log.Print(cmd.client.id, " disconnected")
 				// REMOVE FROM HUB
 				if _, ok := ws.clients[cmd.client]; ok {
 					ws.closeConnection(cmd.client)
@@ -92,7 +84,7 @@ func (ws *Ws) start() {
 		case message := <-ws.broadcast:
 			// Client subEvent
 			for _, client := range ws.mapTopics[message.Topic] {
-				select{
+				select {
 				case client.sender <- message:
 				}
 			}
@@ -114,7 +106,7 @@ func initClient(ws *Ws, w http.ResponseWriter, r *http.Request) *Client {
 		id:     makeID(17),
 		conn:   conn,
 		ws:     ws,
-		sender: make(chan *Message),
+		sender: make(chan *wsh.Message),
 	}
 	ws.register <- &Command{
 		Type:   "connected",
@@ -153,8 +145,8 @@ func (client *Client) inPump() {
 
 		if cmd.Type == "subscribe" {
 			client.subscribe(cmd.Topic)
-			client.ws.broadcast <- &Message{
-				Body: fmt.Sprintf("%s joined at %d", client.id, time.Now().UnixNano()),
+			client.ws.broadcast <- &wsh.Message{
+				Body:  fmt.Sprintf("%s joined at %d", client.id, time.Now().UnixNano()),
 				Topic: cmd.Topic,
 			}
 		} else if cmd.Type == "unsubscribe" {
@@ -189,7 +181,7 @@ func (client *Client) outPump() {
 				return
 			}
 			var b []byte
-			if b, err = json.Marshal(message); err!=nil {
+			if b, err = json.Marshal(message); err != nil {
 				log.Print("ERRR", err)
 				return
 			}
@@ -210,24 +202,24 @@ func (client *Client) outPump() {
 
 func (client *Client) closeConnection() {
 	client.ws.register <- &Command{
-		client:  client,
-		Type:    "disconected",
+		client: client,
+		Type:   "disconected",
 	}
 	client.conn.Close()
 }
 
 func (client *Client) subscribe(topic string) {
 	client.ws.register <- &Command{
-		client:  client,
-		Type:    "subscribe",
-		Topic: topic,
+		client: client,
+		Type:   "subscribe",
+		Topic:  topic,
 	}
 }
 
 func (client *Client) unsubscribe(topic string) {
 	client.ws.register <- &Command{
-		client:  client,
-		Type:    "unsubscribe",
-		Topic: topic,
+		client: client,
+		Type:   "unsubscribe",
+		Topic:  topic,
 	}
 }

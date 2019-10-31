@@ -4,11 +4,16 @@ import (
 	"encoding/json"
 	"flag"
 	"log"
+	"net"
 	"net/http"
 	"os"
+
+	"github.com/my0sot1s/header/wsh"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
-var addr = flag.String("addr", ":" + os.Getenv("PORT"), "http service address")
+var addr = flag.String("addr", ":"+os.Getenv("PORT"), "http service address")
 
 func index(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
@@ -34,12 +39,12 @@ func serveJS(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "wsClient.js")
 }
 
-func wsFirer (ws*Ws, w http.ResponseWriter, r *http.Request) {
+func wsFirer(ws *Ws, w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		return
 	}
-	msg := &Message{}
-	if err := json.NewDecoder(r.Body).Decode(msg); err!=nil {
+	msg := &wsh.Message{}
+	if err := json.NewDecoder(r.Body).Decode(msg); err != nil {
 		http.Error(w, err.Error(), 400)
 		return
 	}
@@ -60,7 +65,7 @@ func wsInspect(ws *Ws, w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		return
 	}
-	detail := make(map[string] int)
+	detail := make(map[string]int)
 	for k, val := range ws.mapTopics {
 		detail[k] = len(val)
 	}
@@ -71,11 +76,25 @@ func wsInspect(ws *Ws, w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("troube for inspect"))
 }
 
+func startGrpcServer(port string, handle *wsProvider) error {
+	listen, err := net.Listen("tcp", port)
+	if err != nil {
+		return err
+	}
+	serve := grpc.NewServer()
+	wsh.RegisterWsProviderServer(serve, handle)
+	reflection.Register(serve)
+	return serve.Serve(listen)
+}
+
 func main() {
 	flag.Parse()
 	ws := initWs()
 	go ws.start()
-
+	if os.Getenv("GRPC_PORT") != "" {
+		wsHandle := &wsProvider{ws}
+		go startGrpcServer(":"+os.Getenv("GRPC_PORT"), wsHandle)
+	}
 	http.HandleFunc("/", index)
 	http.HandleFunc("/demo", serveHome)
 	http.HandleFunc("/wsClient.js", serveJS)
