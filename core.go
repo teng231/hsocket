@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -30,7 +31,8 @@ type Ws struct {
 	clients   map[*Client]bool
 	broadcast chan *wsh.Message
 	register  chan *Command
-	mapTopics map[string][]*Client
+	mapTopics map[string]MapClient
+	mutex     *sync.Mutex
 }
 
 type Client struct {
@@ -40,12 +42,15 @@ type Client struct {
 	sender chan *wsh.Message
 }
 
+type MapClient = map[string]*Client
+
 func initWs() *Ws {
 	return &Ws{
 		broadcast: make(chan *wsh.Message),
 		register:  make(chan *Command),
 		clients:   make(map[*Client]bool),
-		mapTopics: make(map[string][]*Client),
+		mapTopics: make(map[string]MapClient),
+		mutex:     &sync.Mutex{},
 	}
 }
 
@@ -55,38 +60,45 @@ func (ws *Ws) start() {
 		case cmd := <-ws.register:
 			switch cmd.Type {
 			case "connected":
-				log.Print("-- connected  ", cmd.client.id)
+				log.Print("CONNECTED: ", cmd.client.id)
 				ws.clients[cmd.client] = true
+
 			case "disconnected":
-				log.Print(cmd.client.id, " disconnected")
+				log.Print("DISCONECTED: ", cmd.client.id)
 				// REMOVE FROM HUB
 				if _, ok := ws.clients[cmd.client]; ok {
 					ws.closeConnection(cmd.client)
 				}
 				// REMOVE RROM EVENT LIST
-				for topic, clients := range ws.mapTopics {
+				for _, clients := range ws.mapTopics {
 					if len(clients) == 0 {
 						break
 					}
-					ws.mapTopics[topic] = removeItemFromSlice(clients, cmd.client)
+					delete(clients, cmd.client.id)
 				}
+
 			case "subscribe":
 				if _, ok := ws.clients[cmd.client]; !ok {
 					return
 				}
-				ws.mapTopics[cmd.Topic] = append(ws.mapTopics[cmd.Topic], cmd.client)
+				if ws.mapTopics[cmd.Topic] == nil {
+					ws.mapTopics[cmd.Topic] = make(MapClient)
+				}
+				ws.mapTopics[cmd.Topic][cmd.client.id] = cmd.client
+
 			case "unsubscribe":
 				if _, ok := ws.clients[cmd.client]; !ok {
 					return
 				}
-				ws.mapTopics[cmd.Topic] = removeItemFromSlice(ws.mapTopics[cmd.Topic], cmd.client)
+				delete(ws.mapTopics[cmd.Topic], cmd.client.id)
 			}
 		case message := <-ws.broadcast:
 			// Client subEvent
 			for _, client := range ws.mapTopics[message.Topic] {
-				select {
-				case client.sender <- message:
+				if client.sender == nil {
+					return
 				}
+				client.sender <- message
 			}
 		}
 	}
@@ -116,10 +128,9 @@ func initClient(ws *Ws, w http.ResponseWriter, r *http.Request) *Client {
 }
 
 // READ DATA FROM CLIENT SENT
-func (client *Client) inPump() {
+func (client *Client) onListen() {
 	defer func() {
-		client.ws.register <- &Command{Type: "disconnected", client: client}
-		client.conn.Close()
+		client.disconnect()
 	}()
 	client.conn.SetReadLimit(int64(MAX_SIZE))
 	client.conn.SetReadDeadline(time.Now().Add(PONG_WAIT))
@@ -145,11 +156,9 @@ func (client *Client) inPump() {
 
 		if cmd.Type == "subscribe" {
 			client.subscribe(cmd.Topic)
-			client.ws.broadcast <- &wsh.Message{
-				Body:  fmt.Sprintf("%s joined at %d", client.id, time.Now().UnixNano()),
-				Topic: cmd.Topic,
-			}
+			client.broadcast(cmd.Topic, fmt.Sprintf("joined %d", time.Now().UnixNano()))
 		} else if cmd.Type == "unsubscribe" {
+			client.broadcast(cmd.Topic, fmt.Sprintf("left %d", time.Now().UnixNano()))
 			client.unsubscribe(cmd.Topic)
 		} else {
 			// just using for command
@@ -159,12 +168,11 @@ func (client *Client) inPump() {
 	}
 }
 
-func (client *Client) outPump() {
+func (client *Client) onBroadcast() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer func() {
 		ticker.Stop()
-		client.ws.register <- &Command{Type: "disconnected", client: client}
-		client.conn.Close()
+		client.disconnect()
 	}()
 	for {
 		select {
@@ -177,18 +185,18 @@ func (client *Client) outPump() {
 			}
 			w, err := client.conn.NextWriter(websocket.TextMessage)
 			if err != nil {
-				log.Print("ERRR")
+				log.Print("ERRR 1")
 				return
 			}
 			var b []byte
 			if b, err = json.Marshal(message); err != nil {
-				log.Print("ERRR", err)
+				log.Print("ERRR 2", err)
 				return
 			}
 			w.Write(b)
 
 			if err := w.Close(); err != nil {
-				log.Print("ERRR", err)
+				log.Print("ERRR 3", err)
 				return
 			}
 		case <-ticker.C:
@@ -200,7 +208,7 @@ func (client *Client) outPump() {
 	}
 }
 
-func (client *Client) closeConnection() {
+func (client *Client) disconnect() {
 	client.ws.register <- &Command{
 		client: client,
 		Type:   "disconected",
@@ -221,5 +229,12 @@ func (client *Client) unsubscribe(topic string) {
 		client: client,
 		Type:   "unsubscribe",
 		Topic:  topic,
+	}
+}
+
+func (client *Client) broadcast(topic, message string) {
+	client.ws.broadcast <- &wsh.Message{
+		Body:  message,
+		Topic: topic,
 	}
 }

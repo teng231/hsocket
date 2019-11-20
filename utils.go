@@ -35,16 +35,3 @@ func makeID(n int) string {
 
 	return string(b)
 }
-
-// refer https://yourbasic.org/golang/delete-element-slice/
-func removeItemFromSlice(clients []*Client, c *Client) []*Client {
-	for index, client := range clients {
-		if client.id == c.id {
-			clients[index] = clients[len(clients)-1] // Copy last element to index i.
-			clients[len(clients)-1] = nil            // Erase last element (write zero value).
-			clients = clients[:len(clients)-1]       // Truncate slice.
-			return clients
-		}
-	}
-	return clients
-}

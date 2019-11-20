@@ -110,8 +110,8 @@ func main() {
 
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		client := initClient(ws, w, r)
-		go client.inPump()
-		go client.outPump()
+		go client.onListen()
+		go client.onBroadcast()
 	})
 
 	err := http.ListenAndServe(*addr, nil)
