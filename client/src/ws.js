@@ -1,7 +1,7 @@
 let username = ''
 
 function wsClient(configs){
-	var MAX_RETRY = 7
+	var MAX_RETRY = 10
 	var CURRENT_RETRIED = 0
 	var _ws = {
 		conn: null,
@@ -11,24 +11,6 @@ function wsClient(configs){
 	}
 	let me = {}
 	me.onmessage = function() {}
-
-	me.sendEvent = function(topic, notitype) {
-		return fetch('http://' + document.location.host + '/ws-firer', {
-			method: 'POST', // *GET, POST, PUT, DELETE, etc.
-			mode: 'cors', // no-cors, *cors, same-origin
-			headers: {
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({
-				send_to:topic,
-				notification_type: notitype,
-				to_group: true,
-				encoding: "text/plain",
-				sender: username,
-				conn_id: _ws.conn.conn_id,
-			}) // body data type must match "Content-Type" header
-		}).then(rs => rs.json())
-	}
 
 	me.connect = function(cb) {
 		_ws.conn = new configs.WebSocket(_ws.url)

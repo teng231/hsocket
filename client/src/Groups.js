@@ -3,7 +3,6 @@ import React from 'react';
 
 function Groups(props) {
     let groups = Object.values(props.groups) || []
-    console.log(1111, props.selectedGroup.name)
     return (
         <div id="groups">
             {groups.map((group, index) => {
@@ -14,7 +13,9 @@ function Groups(props) {
                return <div key={group.id || group.name}
                     className={classname}
                     onClick={e=> props.onClick(group)}>
-                    `(${group.id}): ${group.name}`
+                    {group.name}
+                    {props.subscribed[group.name]?<div className="subscribed"></div>:null}
+
                 </div>
             })}
         </div>

@@ -56,6 +56,11 @@ class App extends React.Component {
   }
 
   componentDidMount() {
+    let username = prompt('Nhập username')
+    if (username) {
+      this.setState({username})
+    }
+
     let wsclient = wsClient({
       WebSocket: window.WebSocket,
       url: "ws://" + wsHost + "/ws"
@@ -89,6 +94,11 @@ class App extends React.Component {
 
     wsclient.onmessage = (err, message, evt) => {
       console.log(message)
+
+      if(message.notification_type === 'connected') {
+        return
+      }
+
       this.setState((state, props) => ({
         messages: [...state.messages,message]
       }))
@@ -103,6 +113,7 @@ class App extends React.Component {
         this.setState(state => ({groups: {...state.groups, ...groups}}))
       })
     }, 10 * 1000)
+    window.messages = this.state.messages
   }
   componentWillUnmount() {
     this.state.wsclient.close()
@@ -128,7 +139,6 @@ class App extends React.Component {
     if(!this.state.subscribed[group.name]) {
       this.state.wsclient.subscribe(group.name)
     }
-    // this.setState({selectedGroup: group})
     this.subscribeGroup(group)
   }
   render() {
@@ -137,6 +147,7 @@ class App extends React.Component {
         <Logs messages={this.state.messages}/>
         <Groups groups={this.state.groups}
           onClick={(g) => this.handleClickGroup(g)}
+          subscribed={this.state.subscribed}
           selectedGroup={this.state.selectedGroup}/>
         <form id="form">
           <input type="text" id="myInput" placeholder="Nhập tin nhắn."
