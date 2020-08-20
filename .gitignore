@@ -1,3 +1,4 @@
 vendor/
 hsocket
 .vscode/
+client/node_modules

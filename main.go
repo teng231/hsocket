@@ -4,17 +4,21 @@ import (
 	"encoding/json"
 	"flag"
 	"log"
-	"net"
 	"net/http"
-	"os"
-
-	"github.com/my0sot1s/header/wsh"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
 )
 
-var addr = flag.String("addr", ":"+os.Getenv("PORT"), "http service address")
+var port = ""
 
+func init() {
+	flag.StringVar(&port, "port", ":8000", "http port")
+
+}
+func enableCors(w *http.ResponseWriter) {
+	(*w).Header().Set("Access-Control-Allow-Origin", "*")
+	(*w).Header().Set("Access-Control-Allow-Origin", "*")
+	(*w).Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+	(*w).Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+}
 func index(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -39,18 +43,32 @@ func serveJS(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "wsClient.js")
 }
 
-func wsFirer(ws *Ws, w http.ResponseWriter, r *http.Request) {
+func wsFirer(hub *WsHub, w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		return
 	}
-	msg := &wsh.Message{}
-	if err := json.NewDecoder(r.Body).Decode(msg); err != nil {
+	event := &Event{}
+	if err := json.NewDecoder(r.Body).Decode(event); err != nil {
 		http.Error(w, err.Error(), 400)
 		return
 	}
-
-	ws.broadcast <- msg
-
+	// client := hub.getClient(event.ConnId, event.Sender)
+	// // when disconnected
+	// if event.NotificationType == T_disconnected {
+	// 	client.disconnect()
+	// 	return
+	// }
+	// // when subscribe topic
+	// if event.NotificationType == T_subscribe {
+	// 	client.subscribe(event.SendTo, event.Sender)
+	// 	return
+	// }
+	// // when unsubscribe topic
+	// if event.NotificationType == T_unsubscribe {
+	// 	client.unsubscribe(event.SendTo, event.Sender)
+	// 	return
+	// }
+	hub.broadcast <- event
 	w.Write([]byte("done"))
 }
 
@@ -61,62 +79,37 @@ func ping(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("pong"))
 }
 
-func wsInspect(ws *Ws, w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
-		return
-	}
-	detail := make(map[string]int)
-	for k, val := range ws.mapTopics {
-		detail[k] = len(val)
-	}
-	if b, err := json.Marshal(detail); err == nil {
-		w.Write([]byte(b))
-		return
-	}
-	w.Write([]byte("troube for inspect"))
-}
-
-func startGrpcServer(port string, handle *wsProvider) error {
-	listen, err := net.Listen("tcp", port)
-	if err != nil {
-		return err
-	}
-	serve := grpc.NewServer()
-	wsh.RegisterWsProviderServer(serve, handle)
-	reflection.Register(serve)
-	return serve.Serve(listen)
+func handleListTopics(hub *WsHub, w http.ResponseWriter, r *http.Request) {
+	bin, _ := json.Marshal(hub.topics)
+	w.Write(bin)
 }
 
 func main() {
 	flag.Parse()
-	ws := initWs()
-	go ws.start()
-	if os.Getenv("GRPC_PORT") != "" {
-		wsHandle := &wsProvider{ws}
-		go startGrpcServer(":"+os.Getenv("GRPC_PORT"), wsHandle)
-	}
+	hub := initWs()
+	go hub.onStart()
+
 	http.HandleFunc("/", index)
 	http.HandleFunc("/demo", serveHome)
 	http.HandleFunc("/wsClient.js", serveJS)
 	http.HandleFunc("/ping", ping)
-
+	http.HandleFunc("/topics", func(w http.ResponseWriter, r *http.Request) {
+		enableCors(&w)
+		handleListTopics(hub, w, r)
+	})
 	http.HandleFunc("/ws-firer", func(w http.ResponseWriter, r *http.Request) {
-		wsFirer(ws, w, r)
+		enableCors(&w)
+		wsFirer(hub, w, r)
 	})
-
-	http.HandleFunc("/ws-inspect", func(w http.ResponseWriter, r *http.Request) {
-		wsInspect(ws, w, r)
-	})
-
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		client := initClient(ws, w, r)
-		go client.onListen()
-		go client.onBroadcast()
+		client := makeWsClient(hub, w, r)
+		go client.onWsListenMessage()
+		go client.onWsPushMessage()
 	})
 
-	err := http.ListenAndServe(*addr, nil)
+	err := http.ListenAndServe(port, nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
-	log.Print("WS run away at ", os.Getenv("PORT"))
+	log.Print("WS run away at ", port)
 }

@@ -1,3 +1,5 @@
+let username = ''
+
 function wsClient(configs){
 	var MAX_RETRY = 7
 	var CURRENT_RETRIED = 0
@@ -49,7 +51,7 @@ function wsClient(configs){
 			try{
 				let jsonData = JSON.parse(data)
 				// console.log(data)
-				if(data.notification_type == "connected") {
+				if(data.notification_type === "connected") {
 					console.log('connection id:', data.conn_id)
 					window.conn_id = data.conn_id
 					return
@@ -88,10 +90,10 @@ function wsClient(configs){
 			me.subscribe(topic)
 		}
 		var body = ''
-		if(typeof payload == 'string') {
+		if(typeof payload === 'string') {
 			body = payload
 		}
-		if(typeof payload == 'object') {
+		if(typeof payload === 'object') {
 			body = JSON.stringify(payload)
 		}
 		_ws.conn.send(JSON.stringify({
@@ -119,9 +121,10 @@ function wsClient(configs){
 		CURRENT_RETRIED++
 		me.connect(function() {
 			topics.forEach(tp => me.subscribe(tp))
-			if(typeof cb == 'function') cb()
+			if(typeof cb === 'function') cb()
 		})
 	}
 
 	return me
 }
+export default wsClient
