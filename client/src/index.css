@@ -29,13 +29,12 @@ body {
   margin: 0;
   padding: 0.5em 0.5em 0.5em 0.5em;
   position: absolute;
-  top: 0.5em;
-  left: 0.5em;
-  /* right: 0.5em; */
+  top:10px;
+  left: 35%;
   bottom: 4em;
   /* height: 90vh; */
   overflow: auto;
-  width: 50%;
+  width: 56%;
 }
 
 #log .notification {
@@ -43,6 +42,16 @@ body {
   color: rgba(46, 46, 46, 0.8);
   text-align: center;
   padding: 2px;
+}
+#log .border {
+  margin: 10px 2px;
+
+}
+#log .message {
+  padding: 8px 7px;
+  background: rgb(187, 187, 187);
+  border-radius: 10px;
+  font-size: 14px;
 }
 
 #form {
@@ -54,6 +63,7 @@ body {
   width: 100%;
   overflow: hidden;
 }
+
 #myInput {
   height:25px;
   font-size: 12px;
@@ -64,16 +74,16 @@ body {
   margin: 0;
   padding: 0.5em 0.5em 0.5em 0.5em;
   position: absolute;
-  top: 0.5em;
-  right: 0.5em;
-  left: 55%;
-  bottom: 3em;
+  top:75px;
+  left: 0.5em;
+  /* left: 55%; */
+  bottom:4em;
   overflow: auto;
-  width: 40%;
+  width: 30%;
 }
 
 .group {
-  padding: 8px 20px;
+  padding: 15px 20px;
   border: 1px solid gray;
   margin: 4px 0;
   /* display: inline; */
@@ -103,4 +113,24 @@ body {
   width: 25px;
   height: 25px;
   border-radius: 50%;
+}
+
+#header {
+  background: #fff;
+  margin: 0;
+  padding: 0.5em 0.5em 0.5em 0.5em;
+  position: absolute;
+  top: 10px;
+  left: 0.5em;
+  /* right: 0.5em; */
+  bottom: 4em;
+  /* height: 90vh; */
+  overflow: auto;
+  width: 30%;
+  height: 35px;
+  text-align: center;
+}
+
+#header input {
+  width: 60%;
 }

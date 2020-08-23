@@ -1,0 +1,126 @@
+syntax = "proto3";
+
+package header;
+
+message User {
+	// `bson:"_id"`
+	string id = 1;
+	string avatar = 3;
+	string username = 4;
+	string fullname = 5;
+    string phone = 6;
+    int64 created = 7;
+    int64 updated_at = 8;
+}
+
+message UserRequest {
+    int64 limit = 1;
+    int64 page = 2;
+    string id =3;
+}
+
+message Users {
+    repeated User users = 1;
+    int64 next_page = 3;
+}
+
+message Conversations {
+    repeated Conversation conversations = 1;
+    string user_id = 2;
+    string anchor = 3;
+    int32 limit = 4;
+}
+
+message ConversationRequest {
+    string user_id = 1;
+    string state = 2;
+    string anchor = 3;
+    int32 limit = 4;
+}
+
+message Conversation {
+	// `bson:"_id"`
+    string id = 1;
+    map<string, User> members = 2;
+    string state = 4;
+    enum State {
+        active = 0;
+        done = 1;
+    }
+    string creator_id = 5;
+	// `bson:"-"`
+    User creator = 6;
+    string type = 7;
+    enum Type {
+        chat = 0; // 2 peoples in convo
+        room = 1; // many people in convo
+        system = 2; // system notify
+    }
+    int64 created = 9;
+    int64 updated_at = 10;
+
+}
+
+message Attachment {
+   string type = 1;
+   enum Type {
+       image = 0;
+       file = 1;
+   }
+   string url = 2; // for image or file
+   string mimetype = 3;
+}
+
+message MessageRequest {
+    string id =1;
+    string user_id = 2;
+    int64 limit = 4;
+    int64 page = 5;
+    string state = 6;
+    string conversation_id = 7;
+
+}
+
+message Messages {
+    repeated Message messages = 1;
+    string user_id = 2;
+    int64 next_page = 3;
+}
+
+message Message {
+	// `bson:"_id"`
+    string id = 1;
+    string conversation_id = 2;
+	// `bson:"-"`
+    Conversation conversation = 3;
+    string type = 4;
+    enum Type {
+        raw = 0;
+        typing = 1;
+        subscribe = 2;
+        unsubscribe = 3;
+
+    }
+
+    string sender_id = 7;
+	// `bson:"-"`
+    User sender = 8;
+    string text = 10;
+    repeated Attachment attachments = 11;
+    string state = 12;
+    enum State {
+        sent = 0;
+        received = 1;
+        seen = 2;
+    }
+
+    int64 created = 20;
+    int64 updated_at = 21;
+
+}
+
+message Connect {
+    string user_id = 1;
+    User user = 2;
+    bool active = 3;
+}

@@ -48,8 +48,8 @@ function wsClient(configs){
 	me.subscribe = function(topic) {
 		_ws.conn.send(JSON.stringify({
 			notification_type: 'subscribe',
-			send_to: topic,
-			to_group: true,
+			conversation_id: topic,
+			// to_group: true,
 			sender: username,
 		}))
 		// me.sendEvent(topic, 'subscribe')
@@ -59,8 +59,8 @@ function wsClient(configs){
 	me.unsubscribe = function(topic) {
 		_ws.conn.send(JSON.stringify({
 			notification_type: 'unsubscribe',
-			send_to: topic,
-			to_group: true,
+			conversation_id: topic,
+			// to_group: true,
 			sender: username,
 		}))
 		// me.sendEvent(topic, 'unsubscribe')
@@ -79,7 +79,7 @@ function wsClient(configs){
 			body = JSON.stringify(payload)
 		}
 		_ws.conn.send(JSON.stringify({
-			send_to: topic,
+			conversation_id: topic,
 			sender: username,
 			encoding: "text/plain",
 			raw: body

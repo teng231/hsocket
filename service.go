@@ -3,103 +3,111 @@ package main
 import (
 	"encoding/json"
 	"log"
-	"time"
+	"net/http"
 
-	"github.com/gorilla/websocket"
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+	"github.com/gorilla/schema"
+	"github.com/my0sot1s/hsocket/db"
+	pb "github.com/my0sot1s/hsocket/header"
 )
+
+type Convo struct {
+	db IDB
+}
 
 func init() {
 	log.SetFlags(log.Lshortfile)
-}
-func initWs() *WsHub {
-	return &WsHub{
-		broadcast: make(chan *Event),
-		clients:   make(map[string]*Client),
-		topics:    make(map[string]*Topic),
-	}
+	decoder.SetAliasTag("json")
 }
 
-// READ DATA FROM CLIENT SENT
-func (client *Client) onWsListenMessage() {
-	// defer func() {
-	// 	log.Print("xxxx2")
-	// 	client.disconnect()
-	// }()
-	client.conn.SetReadLimit(int64(MAX_SIZE))
-	client.conn.SetReadDeadline(time.Now().Add(PONG_WAIT))
-	client.conn.SetPongHandler(func(string) error {
-		client.conn.SetReadDeadline(time.Now().Add(PONG_WAIT))
-		return nil
+type IDB interface {
+	ListUsers(req *pb.UserRequest) ([]*pb.User, error)
+	GetUser(req *pb.User) (*pb.User, error)
+	InsertUsers(user ...*pb.User) error
+	UpdateUser(updator, selector *pb.User) error
+	// ListConversations(req map[string]interface{}) ([]*pb.Conversation, error)
+	// GetConversation(req map[string]interface{}) (*pb.Conversation, error)
+	// InsertConversation(convo *pb.Conversation) error
+	// UpdateConversation(updator, selector *pb.Conversation) error
+	ListMessages(req *pb.MessageRequest) ([]*pb.Message, error)
+	GetMessage(req *pb.MessageRequest) (*pb.Message, error)
+	InsertMessages(msg ...*pb.Message) error
+	// UpdateMessage(updator, selector *pb.Message) error
+}
+
+var decoder = schema.NewDecoder()
+
+func BindQuery(in interface{}, ctx *gin.Context) error {
+	err := decoder.Decode(in, ctx.Request.URL.Query())
+	return err
+}
+
+func start() {
+	hub := initWs()
+	go hub.onStart()
+	r := gin.Default()
+	r.Use(cors.Default())
+	dbConnect, err := db.ConnectDb("mongodb://admin:1qazxcvbnm@ds255924.mlab.com:55924/conversation", "conversation")
+	if err != nil {
+		panic(err)
+	}
+	conv := &Convo{
+		db: dbConnect,
+	}
+	r.GET("/", func(c *gin.Context) {
+		c.String(200, "We got Gin")
 	})
-	for {
-		_, evt, err := client.conn.ReadMessage()
+	r.GET("/topics", func(c *gin.Context) {
+		w, r := c.Writer, c.Request
+		handleListTopics(hub, w, r)
+	})
+	r.POST("/ws-firer", func(c *gin.Context) {
+		w, r := c.Writer, c.Request
+		wsFirer(hub, w, r)
+	})
+	r.GET("/users", func(c *gin.Context) {
+		// w, r := c.Writer, c.Request
+		// enableCors(&w)
+	})
+	r.GET("/conversations", func(c *gin.Context) {
+		// w, r := c.Writer, c.Request
+		// enableCors(&w)
+	})
+	r.GET("/messages/:convoid", func(c *gin.Context) {
+		rq := &pb.MessageRequest{}
+		BindQuery(rq, c)
+		rq.ConversationId = c.Param("convoid")
+		messages, err := conv.ListMessages(rq)
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("%v disconnected", client.id)
-				client.disconnect()
-			}
-			break
+			c.JSON(500, err)
+			return
 		}
-		// DO Somthing
-		log.Print("message received: ", string(evt))
-		if evt == nil || string(evt) == "" {
-			continue
-		}
-		event := &Event{}
-		if err := json.Unmarshal(evt, event); err != nil {
-			log.Printf("err %v message %s", err, evt)
-			break
-		}
-		event.client = client
-		event.Sender = client.id
-		// when disconnected
-		if event.NotificationType == T_disconnected {
-			client.disconnect()
-		}
-		// when subscribe topic
-		if event.NotificationType == T_subscribe {
-			client.subscribe(event.SendTo, event.Sender)
-		}
-		// when unsubscribe topic
-		if event.NotificationType == T_unsubscribe {
-			client.unsubscribe(event.SendTo, event.Sender)
-		}
-		// // Client subEvent
-		// for _, client := range client.hub.topics[event.SendTo].members {
-		// 	client.sender <- event
-		// }
-	}
+		c.JSON(200, messages)
+	})
+	r.GET("/ws", func(c *gin.Context) {
+		w, r := c.Writer, c.Request
+		client := makeWsClient(hub, w, r)
+		go client.onWsListenMessage()
+		go client.onWsPushMessage()
+	})
+	r.Run(port)
 }
 
-func (client *Client) onWsPushMessage() {
-	ticker := time.NewTicker(1 * time.Minute)
-	defer func() {
-		log.Print("clossssseddd")
-		ticker.Stop()
-		client.disconnect()
-	}()
-	for {
-		select {
-		case message := <-client.sender:
-			client.conn.SetWriteDeadline(time.Now().Add(WRITE_WAIT))
-			writer, err := client.conn.NextWriter(websocket.TextMessage)
-			if err != nil {
-				log.Printf("ERRR: %v", err)
-				client.disconnect()
-				return
-				// continue
-			}
-			messageBuffer, _ := json.Marshal(message)
-			writer.Write(messageBuffer)
-
-			if err := writer.Close(); err != nil {
-				return
-			}
-		case <-ticker.C:
-			client.conn.SetWriteDeadline(time.Now().Add(WRITE_WAIT))
-			if err := client.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				continue
-			}
-		}
+func wsFirer(hub *WsHub, w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		return
 	}
+	event := &Event{}
+	if err := json.NewDecoder(r.Body).Decode(event); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	hub.broadcast <- event
+	w.Write([]byte("done"))
+}
+
+func handleListTopics(hub *WsHub, w http.ResponseWriter, r *http.Request) {
+	bin, _ := json.Marshal(hub.topics)
+	w.Write(bin)
 }

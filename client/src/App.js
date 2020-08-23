@@ -3,6 +3,7 @@ import logo from './logo.svg';
 import Logs from './Logs.js'
 import Groups from './Groups.js'
 import wsClient from './ws.js'
+import Header from './Header.js'
 const wsHost = 'localhost:3001'
 
 function postData(topic, username, body) {
@@ -16,8 +17,8 @@ function postData(topic, username, body) {
 			'Content-Type': 'application/json'
 		},
 		body: JSON.stringify({
-			send_to:topic,
-			raw: body,
+			conversation_id :topic,
+			text: body,
 			encoding: "text/plain",
 			sender: username,
 			// conn_id: _ws.conn.conn_id
@@ -35,6 +36,18 @@ function getGroups() {
 	}).then(rs => rs.json())
 }
 
+function getMessages(limit, page, convoid) {
+	return fetch('http://' + wsHost + '/messages/' + convoid + "?limit=" + limit + "&page="+page, {
+		method: 'GET', // *GET, POST, PUT, DELETE, etc.
+		mode: 'cors', // no-cors, *cors, same-origin
+		headers: {
+			'Content-Type': 'application/json'
+		},
+	}).then(rs => rs.json())
+}
+
+
+
 
 
 class App extends React.Component {
@@ -47,7 +60,7 @@ class App extends React.Component {
       username: 'teng.' + Date.now(),
       groups: {
         'topic.general': {id: '', name: 'topic.general'},
-        'topics.x': {id: '', name: 'topics.x'},
+        'topic.x': {id: '', name: 'topic.x'},
         'chat.x': {id: '', name: 'chat.x'}
       },
       selectedGroup: {},
@@ -71,6 +84,12 @@ class App extends React.Component {
       let defaultGroup = 'topic.general'
       wsclient.subscribe(this.state.groups[defaultGroup].name)
       this.subscribeGroup(this.state.groups[defaultGroup])
+      getMessages(10, 1, 'topic.general').then(resp => {
+        console.log(resp.messages)
+        this.setState({
+          messages: resp.messages || []
+        })
+      })
     })
 
     wsclient.error = (evt) => {
@@ -139,16 +158,24 @@ class App extends React.Component {
     if(!this.state.subscribed[group.name]) {
       this.state.wsclient.subscribe(group.name)
     }
+    getMessages(10, 1, group.name).then(resp => {
+      this.setState({
+        messages: resp.messages || []
+      })
+    })
     this.subscribeGroup(group)
   }
   render() {
     return (
       <div id="app">
-        <Logs messages={this.state.messages}/>
+
         <Groups groups={this.state.groups}
           onClick={(g) => this.handleClickGroup(g)}
           subscribed={this.state.subscribed}
           selectedGroup={this.state.selectedGroup}/>
+
+        <Logs messages={this.state.messages}/>
+        <Header />
         <form id="form">
           <input type="text" id="myInput" placeholder="Nhập tin nhắn."
             onKeyDown={(e) => this.handleKeyDown(e)}

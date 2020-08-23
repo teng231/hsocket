@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"time"
@@ -33,11 +34,10 @@ type Event struct {
 
 	Id               string `json:"id"`
 	ConnId           string `json:"conn_id"`
-	Raw              string `json:"raw"`
+	Text             string `json:"text"`
 	Encoding         string `json:"encoding"`
 	Sender           string `json:"sender"`
-	ToGroup          bool   `json:"to_group"`
-	SendTo           string `json:"send_to"` // topic_id || user
+	ConversationId   string `json:"conversation_id"`
 	NotificationType string `json:"notification_type"`
 	State            string `json:"state"`
 	Created          int64  `json:"created"`
@@ -65,13 +65,13 @@ func (hub *WsHub) onStart() {
 	for {
 		select {
 		case event := <-hub.broadcast:
-			if event.ToGroup {
-				if hub.topics[event.SendTo] == nil {
+			if event.ConversationId != "" {
+				if hub.topics[event.ConversationId] == nil {
 					topic := &Topic{
 						members: make(map[string]*Client),
-						Name:    event.SendTo,
+						Name:    event.ConversationId,
 					}
-					hub.topics[event.SendTo] = topic
+					hub.topics[event.ConversationId] = topic
 				}
 			}
 			// when connected
@@ -89,25 +89,25 @@ func (hub *WsHub) onStart() {
 			}
 			// when subscribe topic
 			if event.NotificationType == T_subscribe {
-				if event.ToGroup {
-					hub.topics[event.SendTo].members[event.client.id] = event.client
+				if event.ConversationId != "" {
+					hub.topics[event.ConversationId].members[event.client.id] = event.client
 				}
 			}
 			// when unsubscribe topic
 			if event.NotificationType == T_unsubscribe {
-				if event.ToGroup {
-					if hub.topics[event.SendTo] != nil {
-						delete(hub.topics[event.SendTo].members, event.client.id)
+				if event.ConversationId != "" {
+					if hub.topics[event.ConversationId] != nil {
+						delete(hub.topics[event.ConversationId].members, event.client.id)
 					}
 				}
 			}
 
 			// log.Print(event.SendTo, hub.topics[event.SendTo])
-			if hub.topics[event.SendTo] == nil {
+			if hub.topics[event.ConversationId] == nil {
 				continue
 			}
 			// Client subEvent
-			for _, client := range hub.topics[event.SendTo].members {
+			for _, client := range hub.topics[event.ConversationId].members {
 				client.sender <- event
 			}
 		}
@@ -143,7 +143,7 @@ func (client *Client) disconnect() {
 		Id:               "evt" + makeID(10),
 		NotificationType: T_disconnected,
 		client:           client,
-		Raw:              client.id + " disconected",
+		Text:             client.id + " disconected",
 		Created:          time.Now().Unix(),
 		Encoding:         E_text,
 	}
@@ -155,10 +155,9 @@ func (client *Client) subscribe(topic, sender string) {
 		Id:               "evt" + makeID(10),
 		NotificationType: T_subscribe,
 		client:           client,
-		Raw:              client.id + " subscribed " + topic,
+		Text:             client.id + " subscribed " + topic,
 		Created:          time.Now().Unix(),
-		SendTo:           topic,
-		ToGroup:          true,
+		ConversationId:   topic,
 		Encoding:         E_text,
 		Sender:           sender,
 	}
@@ -169,10 +168,9 @@ func (client *Client) unsubscribe(topic, sender string) {
 		Id:               "evt" + makeID(10),
 		NotificationType: T_unsubscribe,
 		client:           client,
-		ToGroup:          true,
-		Raw:              client.id + " unsubscribed " + topic,
+		Text:             client.id + " unsubscribed " + topic,
 		Created:          time.Now().Unix(),
-		SendTo:           topic,
+		ConversationId:   topic,
 		Encoding:         E_text,
 		Sender:           sender,
 	}
@@ -180,12 +178,11 @@ func (client *Client) unsubscribe(topic, sender string) {
 
 func (client *Client) sendMultipleUser(topic, message string) {
 	client.hub.broadcast <- &Event{
-		Raw:      message,
-		SendTo:   topic,
-		ToGroup:  true,
-		client:   client,
-		Encoding: E_json,
-		Created:  time.Now().Unix(),
+		Text:           message,
+		ConversationId: topic,
+		client:         client,
+		Encoding:       E_json,
+		Created:        time.Now().Unix(),
 	}
 }
 
@@ -199,4 +196,96 @@ func (hub *WsHub) getClient(sendTo, connid string) *Client {
 	client := hub.topics[sendTo].members[connid]
 	log.Print(client)
 	return client
+}
+func initWs() *WsHub {
+	return &WsHub{
+		broadcast: make(chan *Event),
+		clients:   make(map[string]*Client),
+		topics:    make(map[string]*Topic),
+	}
+}
+
+// READ DATA FROM CLIENT SENT
+func (client *Client) onWsListenMessage() {
+	// defer func() {
+	// 	log.Print("xxxx2")
+	// 	client.disconnect()
+	// }()
+	client.conn.SetReadLimit(int64(MAX_SIZE))
+	client.conn.SetReadDeadline(time.Now().Add(PONG_WAIT))
+	client.conn.SetPongHandler(func(string) error {
+		client.conn.SetReadDeadline(time.Now().Add(PONG_WAIT))
+		return nil
+	})
+	for {
+		_, evt, err := client.conn.ReadMessage()
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("%v disconnected", client.id)
+				client.disconnect()
+			}
+			break
+		}
+		// DO Somthing
+		log.Print("message received: ", string(evt))
+		if evt == nil || string(evt) == "" {
+			continue
+		}
+		event := &Event{}
+		if err := json.Unmarshal(evt, event); err != nil {
+			log.Printf("err %v message %s", err, evt)
+			break
+		}
+		event.client = client
+		event.Sender = client.id
+		// when disconnected
+		if event.NotificationType == T_disconnected {
+			client.disconnect()
+		}
+		// when subscribe topic
+		if event.NotificationType == T_subscribe {
+			client.subscribe(event.ConversationId, event.Sender)
+		}
+		// when unsubscribe topic
+		if event.NotificationType == T_unsubscribe {
+			client.unsubscribe(event.ConversationId, event.Sender)
+		}
+		// // Client subEvent
+		// for _, client := range client.hub.topics[event.SendTo].members {
+		// 	client.sender <- event
+		// }
+	}
+}
+
+func (client *Client) onWsPushMessage() {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer func() {
+		log.Print("clossssseddd")
+		ticker.Stop()
+		client.disconnect()
+	}()
+	for {
+		select {
+		case message := <-client.sender:
+			client.conn.SetWriteDeadline(time.Now().Add(WRITE_WAIT))
+			writer, err := client.conn.NextWriter(websocket.TextMessage)
+			if err != nil {
+				log.Printf("ERRR: %v", err)
+				client.disconnect()
+				return
+				// continue
+			}
+			messageBuffer, _ := json.Marshal(message)
+			writer.Write(messageBuffer)
+
+			if err := writer.Close(); err != nil {
+				return
+			}
+		case <-ticker.C:
+			client.conn.SetWriteDeadline(time.Now().Add(WRITE_WAIT))
+			if err := client.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				continue
+			}
+		}
+	}
 }
