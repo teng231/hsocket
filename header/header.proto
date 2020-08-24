@@ -17,6 +17,8 @@ message UserRequest {
     int64 limit = 1;
     int64 page = 2;
     string id =3;
+    string username = 4;
+    string fullname = 5;
 }
 
 message Users {
@@ -27,19 +29,18 @@ message Users {
 message Conversations {
     repeated Conversation conversations = 1;
     string user_id = 2;
-    string anchor = 3;
-    int32 limit = 4;
+    int64 next_page = 4;
 }
 
 message ConversationRequest {
     string user_id = 1;
     string state = 2;
-    string anchor = 3;
-    int32 limit = 4;
+    int64 limit = 4;
+    int64 page = 5;
+    string id = 7;
 }
 
 message Conversation {
-	// `bson:"_id"`
     string id = 1;
     map<string, User> members = 2;
     string state = 4;

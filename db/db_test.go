@@ -17,20 +17,20 @@ func Test_createUser(t *testing.T) {
 	d, _ := ConnectDb("mongodb://admin:1qazxcvbnm@ds255924.mlab.com:55924/conversation", "conversation")
 	err := d.InsertUsers(&pb.User{
 		Id:       pb.MakeId(),
-		Username: "thudiu",
-		Fullname: "Thu Diu",
+		Username: "hoahong",
+		Fullname: "Hoa hong",
 		Created:  time.Now().Unix(),
 		Avatar:   "https://vcdn-vnexpress.vnecdn.net/2020/07/23/ngoc-miu-3-1349-1595472279.jpg",
 	}, &pb.User{
 		Id:       pb.MakeId(),
-		Username: "cuonglol",
-		Fullname: "Thuong Vo",
+		Username: "hiepto",
+		Fullname: "Hiep To",
 		Created:  time.Now().Unix(),
 		Avatar:   "https://znews-photo.zadn.vn/w660/Uploaded/qfssu/2019_12_24/7_zing.jpg",
 	}, &pb.User{
 		Id:       pb.MakeId(),
-		Username: "teng",
-		Fullname: "Te nguyen",
+		Username: "teng2",
+		Fullname: "Te nguyen 2",
 		Created:  time.Now().Unix(),
 		Avatar:   "https://i.ytimg.com/vi/bWh83yaA0k0/maxresdefault.jpg",
 	},
@@ -41,7 +41,7 @@ func Test_createUser(t *testing.T) {
 }
 func Test_listUsers(t *testing.T) {
 	d, _ := ConnectDb("mongodb://admin:1qazxcvbnm@ds255924.mlab.com:55924/conversation", "conversation")
-	users, err := d.ListUsers(&pb.UserRequest{Limit: 2, Page: 1})
+	users, err := d.ListUsers(&pb.UserRequest{Limit: 2, Page: 1, Username: "teng"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func Test_listUsers(t *testing.T) {
 }
 func Test_getUser(t *testing.T) {
 	d, _ := ConnectDb("mongodb://admin:1qazxcvbnm@ds255924.mlab.com:55924/conversation", "conversation")
-	user, err := d.GetUser(&pb.User{Id: "5f41fec73af329b9755256ce"})
+	user, err := d.GetUser(&pb.UserRequest{Id: "5f4297a88aa6e74f1b2edcce"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,9 +108,62 @@ func Test_insertMessage(t *testing.T) {
 
 func Test_listMessages(t *testing.T) {
 	d, _ := ConnectDb("mongodb://admin:1qazxcvbnm@ds255924.mlab.com:55924/conversation", "conversation")
-	msgs, err := d.ListMessages(&pb.MessageRequest{Limit: 2, Page: 1, ConversationId: "topic.general"})
+	msgs, err := d.ListMessages(&pb.MessageRequest{Limit: 2, Page: 1, ConversationId: "topic.x"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	log.Print(msgs)
+}
+
+func Test_insertConvo(t *testing.T) {
+	d, _ := ConnectDb("mongodb://admin:1qazxcvbnm@ds255924.mlab.com:55924/conversation", "conversation")
+	err := d.InsertConversations(&pb.Conversation{
+		Id:      "topic.general",
+		Type:    pb.Conversation_room.String(),
+		Created: time.Now().Unix(),
+		State:   pb.Conversation_active.String(),
+	}, &pb.Conversation{
+		Id:      "topic.room",
+		Type:    pb.Conversation_room.String(),
+		Created: time.Now().Unix(),
+		State:   pb.Conversation_active.String(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func Test_updateConvo(t *testing.T) {
+	d, _ := ConnectDb("mongodb://admin:1qazxcvbnm@ds255924.mlab.com:55924/conversation", "conversation")
+	user, err := d.GetUser(&pb.UserRequest{Id: "5f4297a88aa6e74f1b2edcd0"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = d.UpdateConversation(&pb.Conversation{
+		Members: map[string]*pb.User{
+			"5f4297a88aa6e74f1b2edcd0": user,
+		},
+	}, &pb.Conversation{
+		Id: "topic.general",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func Test_listConvo(t *testing.T) {
+	d, _ := ConnectDb("mongodb://admin:1qazxcvbnm@ds255924.mlab.com:55924/conversation", "conversation")
+	msgs, err := d.ListConversations(&pb.ConversationRequest{Limit: 2, Page: 1, UserId: "5f4297a88aa6e74f1b2edcd0"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Print(msgs)
+}
+func Test_getConvo(t *testing.T) {
+	d, _ := ConnectDb("mongodb://admin:1qazxcvbnm@ds255924.mlab.com:55924/conversation", "conversation")
+	convo, err := d.GetConversation(&pb.ConversationRequest{Id: "topic.general"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Print(convo)
 }

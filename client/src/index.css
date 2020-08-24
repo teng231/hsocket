@@ -114,7 +114,11 @@ body {
   height: 25px;
   border-radius: 50%;
 }
-
+.icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
 #header {
   background: #fff;
   margin: 0;

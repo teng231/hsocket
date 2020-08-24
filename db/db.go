@@ -45,7 +45,15 @@ func (d *DB) ListUsers(req *pb.UserRequest) ([]*pb.User, error) {
 	options.SetSort(bson.D{{"_id", -1}})
 	options.SetLimit(req.GetLimit())
 	options.SetSkip((req.GetPage() - 1) * req.GetLimit())
-	cursor, err := d.cUser.Find(context.TODO(), bson.M{}, options)
+	m := bson.M{}
+	if req.GetUsername() != "" {
+		m["username"] = req.GetUsername()
+	}
+	if req.GetFullname() != "" {
+		m["fullname"] = req.GetFullname()
+	}
+
+	cursor, err := d.cUser.Find(context.TODO(), m, options)
 	if err != nil {
 		return nil, err
 	}
@@ -61,9 +69,16 @@ func (d *DB) ListUsers(req *pb.UserRequest) ([]*pb.User, error) {
 	return users, nil
 }
 
-func (d *DB) GetUser(cond *pb.User) (*pb.User, error) {
+func (d *DB) GetUser(cond *pb.UserRequest) (*pb.User, error) {
 	user := &pb.User{}
-	err := d.cUser.FindOne(context.TODO(), bson.M{"_id": cond.GetId()}).Decode(user)
+	m := bson.M{}
+	if cond.GetId() != "" {
+		m["_id"] = cond.GetId()
+	}
+	if cond.GetUsername() != "" {
+		m["username"] = cond.GetUsername()
+	}
+	err := d.cUser.FindOne(context.TODO(), m).Decode(user)
 	if err != nil {
 		log.Print(cond.GetId())
 		return nil, err
@@ -103,14 +118,23 @@ func (d *DB) UpdateUser(updator, selector *pb.User) error {
 	return nil
 }
 
-func (d *DB) ListConversations(req map[string]interface{}) ([]*pb.Conversation, error) {
-	cursor, err := d.cConversion.Find(context.TODO(), req)
+func (d *DB) ListConversations(req *pb.ConversationRequest) ([]*pb.Conversation, error) {
+	options := options.Find()
+	// Sort by `_id` field descending
+	options.SetSort(bson.D{{"_id", -1}})
+	options.SetLimit(req.GetLimit())
+	options.SetSkip((req.GetPage() - 1) * req.GetLimit())
+	m := bson.D{}
+	if req.GetUserId() != "" {
+		m = bson.D{{"members." + req.GetUserId(), bson.M{"$exists": true}}}
+	}
+	cursor, err := d.cConversion.Find(context.TODO(), m, options)
 	if err != nil {
 		return nil, err
 	}
 	convos := []*pb.Conversation{}
 	for cursor.Next(context.TODO()) {
-		var convo *pb.Conversation
+		convo := &pb.Conversation{}
 		if err := cursor.Decode(convo); err != nil {
 			continue
 		}
@@ -119,18 +143,29 @@ func (d *DB) ListConversations(req map[string]interface{}) ([]*pb.Conversation, 
 	return convos, nil
 }
 
-func (d *DB) GetConversation(cond *pb.Conversation) (*pb.Conversation, error) {
+func (d *DB) GetConversation(cond *pb.ConversationRequest) (*pb.Conversation, error) {
 	convo := &pb.Conversation{}
 	err := d.cConversion.FindOne(context.TODO(),
-		bson.M{"_id": cond.GetId()}).Decode(convo)
+		bson.M{"id": cond.GetId()}).Decode(convo)
 	if err != nil {
 		return nil, err
 	}
 	return convo, nil
 }
 
-func (d *DB) InsertConversation(convo *pb.Conversation) error {
-	_, err := d.cConversion.InsertOne(context.TODO(), convo)
+func (d *DB) InsertConversations(convos ...*pb.Conversation) error {
+	if len(convos) == 1 {
+		_, err := d.cConversion.InsertOne(context.TODO(), convos[0])
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	payloads := []interface{}{}
+	for _, convo := range convos {
+		payloads = append(payloads, convo)
+	}
+	_, err := d.cConversion.InsertMany(context.TODO(), payloads)
 	if err != nil {
 		return err
 	}
@@ -140,8 +175,9 @@ func (d *DB) InsertConversation(convo *pb.Conversation) error {
 func (d *DB) UpdateConversation(updator, selector *pb.Conversation) error {
 	settor := pb.StructToMap(updator)
 	delete(settor, "id")
-	_, err := d.cUser.UpdateOne(context.TODO(), bson.M{
-		"_id": selector.GetId(),
+	log.Print(settor)
+	_, err := d.cConversion.UpdateOne(context.TODO(), bson.M{
+		"id": selector.GetId(),
 	}, bson.M{
 		"$set": settor,
 	})
@@ -158,9 +194,9 @@ func (d *DB) ListMessages(req *pb.MessageRequest) ([]*pb.Message, error) {
 	options.SetLimit(req.GetLimit())
 	options.SetSkip((req.GetPage() - 1) * req.GetLimit())
 	reqConvo := bson.M{}
-	// if req.GetConversationId() != "" {
-	// 	reqConvo["conversation_id"] = req.GetConversationId()
-	// }
+	if req.GetConversationId() != "" {
+		reqConvo["conversationid"] = req.GetConversationId()
+	}
 
 	cursor, err := d.cMessage.Find(context.TODO(), reqConvo, options)
 	if err != nil {

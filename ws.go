@@ -36,7 +36,7 @@ type Event struct {
 	ConnId           string `json:"conn_id"`
 	Text             string `json:"text"`
 	Encoding         string `json:"encoding"`
-	Sender           string `json:"sender"`
+	SenderId         string `json:"sender_id"`
 	ConversationId   string `json:"conversation_id"`
 	NotificationType string `json:"notification_type"`
 	State            string `json:"state"`
@@ -159,7 +159,7 @@ func (client *Client) subscribe(topic, sender string) {
 		Created:          time.Now().Unix(),
 		ConversationId:   topic,
 		Encoding:         E_text,
-		Sender:           sender,
+		SenderId:         sender,
 	}
 }
 
@@ -172,7 +172,7 @@ func (client *Client) unsubscribe(topic, sender string) {
 		Created:          time.Now().Unix(),
 		ConversationId:   topic,
 		Encoding:         E_text,
-		Sender:           sender,
+		SenderId:         sender,
 	}
 }
 
@@ -237,18 +237,18 @@ func (client *Client) onWsListenMessage() {
 			break
 		}
 		event.client = client
-		event.Sender = client.id
+		event.SenderId = client.id
 		// when disconnected
 		if event.NotificationType == T_disconnected {
 			client.disconnect()
 		}
 		// when subscribe topic
 		if event.NotificationType == T_subscribe {
-			client.subscribe(event.ConversationId, event.Sender)
+			client.subscribe(event.ConversationId, event.SenderId)
 		}
 		// when unsubscribe topic
 		if event.NotificationType == T_unsubscribe {
-			client.unsubscribe(event.ConversationId, event.Sender)
+			client.unsubscribe(event.ConversationId, event.SenderId)
 		}
 		// // Client subEvent
 		// for _, client := range client.hub.topics[event.SendTo].members {

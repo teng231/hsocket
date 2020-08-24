@@ -2,19 +2,19 @@ import React from 'react';
 
 
 function Groups(props) {
-    let groups = Object.values(props.groups) || []
+    let conversations = Object.values(props.conversations) || []
     return (
         <div id="groups">
-            {groups.map((group, index) => {
+            {conversations.map((group, index) => {
                 let classname = 'group'
                 if (props.selectedGroup.name === group.name) {
                     classname += ' active'
                 }
-               return <div key={group.id || group.name}
+               return <div key={group.id || group.id}
                     className={classname}
                     onClick={e=> props.onClick(group)}>
-                    {group.name}
-                    {props.subscribed[group.name]?<div className="subscribed"></div>:null}
+                    {group.id}
+                    {props.subscribed[group.id]?<div className="subscribed"></div>:null}
 
                 </div>
             })}
