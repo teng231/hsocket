@@ -117,16 +117,28 @@ func Test_listMessages(t *testing.T) {
 
 func Test_insertConvo(t *testing.T) {
 	d, _ := ConnectDb("mongodb://admin:1qazxcvbnm@ds255924.mlab.com:55924/conversation", "conversation")
-	err := d.InsertConversations(&pb.Conversation{
-		Id:      "topic.general",
-		Type:    pb.Conversation_room.String(),
+	// err := d.InsertConversations(&pb.Conversation{
+	// 	Id:      "topic.general",
+	// 	Type:    pb.Conversation_room.String(),
+	// 	Created: time.Now().Unix(),
+	// 	State:   pb.Conversation_active.String(),
+	// }, &pb.Conversation{
+	// 	Id:      "topic.room",
+	// 	Type:    pb.Conversation_room.String(),
+	// 	Created: time.Now().Unix(),
+	// 	State:   pb.Conversation_active.String(),
+	// })
+	user1, err := d.GetUser(&pb.UserRequest{Id: "5f4297a88aa6e74f1b2edcd0"})
+	user2, err := d.GetUser(&pb.UserRequest{Id: "5f4297a88aa6e74f1b2edcce"})
+	err = d.InsertConversations(&pb.Conversation{
+		Id:      pb.MakeId(),
+		Type:    pb.Conversation_chat.String(),
 		Created: time.Now().Unix(),
-		State:   pb.Conversation_active.String(),
-	}, &pb.Conversation{
-		Id:      "topic.room",
-		Type:    pb.Conversation_room.String(),
-		Created: time.Now().Unix(),
-		State:   pb.Conversation_active.String(),
+		Members: map[string]*pb.User{
+			"5f4297a88aa6e74f1b2edcd0": user1,
+			"5f4297a88aa6e74f1b2edcce": user2,
+		},
+		State: pb.Conversation_active.String(),
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -31,6 +31,13 @@ function loadAuthen() {
 
   }
 }
+
+function preSubscribe(handle, conversations) {
+  for(let k in conversations) {
+    handle.subscribeGroup(conversations[k])
+  }
+}
+
 class App extends React.Component {
   constructor(props) {
     super(props)
@@ -67,6 +74,7 @@ class App extends React.Component {
           mConvo[c.id] = c
         }
         this.setState({conversations: mConvo})
+        preSubscribe(this, this.state.conversations)
       }
     })
     let wsclient = wsClient({
@@ -136,7 +144,7 @@ class App extends React.Component {
     if(!this.state.subscribed[convo.id]) {
       this.state.wsclient.subscribe(convo.id)
     }
-    getMessages(10, 1, convo.id).then(resp => {
+    getMessages(15, 1, convo.id).then(resp => {
       this.setState({
         messages: (resp.messages || []).reverse()
       })
@@ -146,13 +154,18 @@ class App extends React.Component {
   render() {
     return (
       <div id="app">
-        <Conversation conversations={this.state.conversations}
+        <Conversation
+          conversations={this.state.conversations}
+          me={this.state.userauth}
           onClick={(g) => this.handleClickConvo(g)}
           subscribed={this.state.subscribed}
-          selectedGroup={this.state.selectedGroup}/>
+          selectedGroup={this.state.selectedGroup}>
+          <Header userauth={this.state.userauth}/>
+        </Conversation>
 
+       <div className="leftPanel">
         <Logs messages={this.state.messages}/>
-        <Header userauth={this.state.userauth}/>
+
         <form id="form">
           <input type="text" id="myInput" placeholder="Nhập tin nhắn."
             onKeyDown={(e) => this.handleKeyDown(e)}
@@ -160,6 +173,7 @@ class App extends React.Component {
             value={this.state.inputMessage}
             />
         </form>
+       </div>
       </div>
     )
   }

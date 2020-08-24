@@ -5,10 +5,10 @@ const elementDisplay = (message) => {
   if(message.notification_type) {
     return <p className="notification">{message.text}</p>
   }
-  return <span>
+  return <div>
     <Avatar avatar={message.avatar}/>
     <span className="message" >{message.text}</span>
-  </span>
+  </div>
 }
 function Log(props) {
   return (
