@@ -46,6 +46,20 @@ func Test_listUsers(t *testing.T) {
 		t.Fatal(err)
 	}
 	log.Print(users)
+
+	// users, err = d.ListUsers(&pb.UserRequest{Limit: 2, Page: 1, Fullname: "nguyen", Username: "teng"})
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+
+	// log.Print(users)
+
+	users, err = d.ListUsers(&pb.UserRequest{Limit: 2, Page: 1, Fullname: "Te"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	log.Print(users)
 }
 func Test_getUser(t *testing.T) {
 	d, _ := ConnectDb("mongodb://admin:1qazxcvbnm@ds255924.mlab.com:55924/conversation", "conversation")

@@ -4,7 +4,7 @@ function sendMessage(convoid, sender_id, body) {
 	if(!body) {
 		return
 	}
-	return fetch('http://' + wsHost + '/ws-firer', {
+	return fetch('http://' + wsHost + '/send', {
 		method: 'POST', // *GET, POST, PUT, DELETE, etc.
 		mode: 'cors', // no-cors, *cors, same-origin
 		headers: {
@@ -31,8 +31,8 @@ function getMessages(limit, page, convoid) {
 	}).then(rs => rs.json())
 }
 
-function getUsers(limit, page, username) {
-	return fetch('http://' + wsHost + '/users?limit=' + limit + "&page="+page + "&username=" + username, {
+function getUsers(limit, page, fullname) {
+	return fetch('http://' + wsHost + '/users?limit=' + limit + "&page="+page + "&fullname=" + fullname, {
 		method: 'GET', // *GET, POST, PUT, DELETE, etc.
 		mode: 'cors', // no-cors, *cors, same-origin
 		headers: {

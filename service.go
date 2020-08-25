@@ -63,7 +63,7 @@ func start() {
 		w, r := c.Writer, c.Request
 		handleListTopics(hub, w, r)
 	})
-	r.POST("/ws-firer", func(c *gin.Context) {
+	r.POST("/send", func(c *gin.Context) {
 		w, r := c.Writer, c.Request
 		event := wsFirer(hub, w, r)
 		err := conv.db.InsertMessages(&pb.Message{
@@ -85,6 +85,7 @@ func start() {
 		if rq.GetPage() == 0 {
 			rq.Page = 1
 		}
+		log.Print(rq)
 		users, err := conv.db.ListUsers(rq)
 		if err != nil {
 			c.JSON(500, err)

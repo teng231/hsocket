@@ -27,7 +27,6 @@ function render(group, me) {
 }
 function Groups(props) {
     let conversations = Object.values(props.conversations) || []
-    debugger
     return (
         <div id="groups">
             {props.children}

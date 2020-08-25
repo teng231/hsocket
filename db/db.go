@@ -50,9 +50,8 @@ func (d *DB) ListUsers(req *pb.UserRequest) ([]*pb.User, error) {
 		m["username"] = req.GetUsername()
 	}
 	if req.GetFullname() != "" {
-		m["fullname"] = req.GetFullname()
+		m["fullname"] = bson.M{"$regex": "^.*" + req.GetFullname() + ".*$", "$options": "g"}
 	}
-
 	cursor, err := d.cUser.Find(context.TODO(), m, options)
 	if err != nil {
 		return nil, err
@@ -124,9 +123,9 @@ func (d *DB) ListConversations(req *pb.ConversationRequest) ([]*pb.Conversation,
 	options.SetSort(bson.D{{"_id", -1}})
 	options.SetLimit(req.GetLimit())
 	options.SetSkip((req.GetPage() - 1) * req.GetLimit())
-	m := bson.D{}
+	m := bson.M{}
 	if req.GetUserId() != "" {
-		m = bson.D{{"members." + req.GetUserId(), bson.M{"$exists": true}}}
+		m["members."+req.GetUserId()] = bson.M{"$exists": true}
 	}
 	cursor, err := d.cConversion.Find(context.TODO(), m, options)
 	if err != nil {

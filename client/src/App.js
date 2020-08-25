@@ -54,19 +54,7 @@ class App extends React.Component {
       subscribed: []
     }
   }
-
-  componentDidMount() {
-    let userauth = loadAuthen()
-    if(!userauth) {
-      let username = prompt('Nhập username')
-      if (username) {
-        login(username).then(user => {
-          this.setState({userauth: user})
-        })
-      }
-    }else {
-      this.setState({userauth})
-    }
+  loadConvo(userauth) {
     getConversations(10, 1, userauth.id).then(convo => {
       if(convo.length> 0) {
         let mConvo = {}
@@ -76,7 +64,15 @@ class App extends React.Component {
         this.setState({conversations: mConvo})
         preSubscribe(this, this.state.conversations)
       }
+    }).then(() => {
+      let general = 'topic.general'
+      if(!Object.keys(this.state.conversations).includes(general)){
+        return
+      }
+      this.handleClickConvo(this.state.conversations[general])
     })
+  }
+  loadWs() {
     let wsclient = wsClient({
       WebSocket: window.WebSocket,
       url: "ws://" + wsHost + "/ws"
@@ -89,27 +85,26 @@ class App extends React.Component {
     })
 
     wsclient.error = (evt) => {
-      this.setState((state, props) => ({
+      this.setState(state => ({
         messages: [...state.messages, {text: 'Connection error'}]
       }))
     }
 
     wsclient.closed = (evt) => {
-      this.setState((state, props) => ({
+      this.setState(state => ({
         messages: [...state.messages, {text: 'Connection closed.reconnecting....'}]
       }))
       // reconnect
       wsclient.reconnect()
     }
     wsclient.ondead = () => {
-      this.setState((state, props) => ({
+      this.setState(state => ({
         messages: [...state.messages, {text: 'Connection dead'}]
       }))
     }
 
     wsclient.onmessage = (err, message, evt) => {
       console.log(message)
-
       if(message.notification_type === 'connected') {
         return
       }
@@ -118,19 +113,43 @@ class App extends React.Component {
         messages: [...state.messages,message]
       }))
     }
+  }
+  componentDidMount() {
+    let userauth = loadAuthen()
+    if(!userauth) {
+      let username = prompt('Nhập username')
+      if (username) {
+        login(username).then(user => {
+          this.setState({userauth: user})
+        })
+      }
+    }else {
+      this.setState({userauth})
+    }
+    this.loadConvo(userauth)
+    this.loadWs()
     window.messages = this.state.messages
   }
   componentWillUnmount() {
     this.state.wsclient.close()
   }
+
   handleKeyDown = (event) => {
     if (event.key !== 'Enter') {
       return
     }
+    if(!this.state.inputMessage) {
+      return
+    }
     sendMessage(this.state.selectedGroup.name, this.state.userauth.sender_id, this.state.inputMessage)
+      .then(()=> {})
+      .catch(err => {
+        alert(err.toString())
+      })
     event.preventDefault();
     this.setState({inputMessage: ''})
   }
+
   handleOnChange = (event) => {
     this.setState({inputMessage: event.target.value})
   }
