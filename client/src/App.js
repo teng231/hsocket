@@ -54,6 +54,7 @@ class App extends React.Component {
       subscribed: []
     }
   }
+  input = null
   loadConvo(userauth) {
     getConversations(10, 1, userauth.id).then(convo => {
       if(convo.length> 0) {
@@ -129,9 +130,13 @@ class App extends React.Component {
     this.loadConvo(userauth)
     this.loadWs()
     window.messages = this.state.messages
+    this.scrollToBottom()
   }
   componentWillUnmount() {
     this.state.wsclient.close()
+  }
+  scrollToBottom = () => {
+    this.input.scrollIntoView({ behavior: "smooth" });
   }
 
   handleKeyDown = (event) => {
@@ -141,8 +146,16 @@ class App extends React.Component {
     if(!this.state.inputMessage) {
       return
     }
-    sendMessage(this.state.selectedGroup.name, this.state.userauth.sender_id, this.state.inputMessage)
-      .then(()=> {})
+    sendMessage(this.state.selectedGroup.id, this.state.userauth.id, this.state.inputMessage)
+      .then((mes)=> {
+        this.setState(state => {
+          return {
+            messages: [...state.messages, mes]
+          }
+        }, () => {
+          this.scrollToBottom()
+        })
+      })
       .catch(err => {
         alert(err.toString())
       })
@@ -156,7 +169,7 @@ class App extends React.Component {
   subscribeGroup(group) {
     this.setState(state => ({
       selectedGroup: group,
-      subscribed: {...state.subscribed, [group.name]: true}
+      subscribed: {...state.subscribed, [group.id]: true}
     }))
   }
   handleClickConvo(convo) {
@@ -186,7 +199,7 @@ class App extends React.Component {
         <Logs messages={this.state.messages}/>
 
         <form id="form">
-          <input type="text" id="myInput" placeholder="Nhập tin nhắn."
+          <input type="text" id="myInput" placeholder="Nhập tin nhắn." ref={el => this.input = el}
             onKeyDown={(e) => this.handleKeyDown(e)}
             onChange={e => this.handleOnChange(e)}
             value={this.state.inputMessage}

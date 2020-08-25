@@ -25,6 +25,10 @@ function handleKeyDown(event, setText, settor) {
     event.preventDefault();
 }
 
+function handleClick(e, settor) {
+    settor(e.target.value)
+}
+
 function Header(props) {
     let userauth = props.userauth
     const [searchText, setSearchText] = useState('');
@@ -40,7 +44,9 @@ function Header(props) {
                 onChange={e => handleSearch(e, setSearchText)}/>
             <ul className="search-user">
                 {listUsers.map(user => {
-                    return <li>{user.fullname}</li>
+                    return <li onClick={e => handleClick(e)}>
+                        <img className="icon" src={user.avatar} />
+                        {user.fullname}</li>
                 })}
             </ul>
         </div>

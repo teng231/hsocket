@@ -27,8 +27,8 @@ body {
 }
 
 #app {
-  width: 70%;
-  margin:15px 15% 0 15%;
+  width: 80%;
+  margin:10px 10% 0 10%;
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
@@ -43,9 +43,10 @@ body {
 }
 #log {
   flex:4;
+  min-width: 400px;
   background: #fff;
   padding: 0.5em 0.5em 0.5em 0.5em;
-  margin: 10px 15px;
+  /* margin: 10px 15px; */
   overflow: auto;
   height: 76vh;
 }
@@ -93,6 +94,7 @@ body {
   bottom:4em;
   overflow: auto;
   flex: 1px;
+  min-width: 240px;
 }
 
 .group {
@@ -132,6 +134,7 @@ body {
 .icon {
   width: 20px;
   height: 20px;
+  vertical-align: middle;
   border-radius: 50%;
 }
 #header {
